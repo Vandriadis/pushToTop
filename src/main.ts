@@ -10,7 +10,7 @@ const API_KEY = '073a33ff8679b4d94d77dd436c287d4f'; // <-- Replace with your 2Ca
 const proxy = {
   host: 'de.922s5.net',
   port: 6300,
-  username: '17669994-zone-custom-region-UA-sessid-ZzbDPkab',
+  username: '17669994-zone-custom-region-UA-sessid-fgmPp8Iz',
   password: 'FQORPLVx',
 };
 
@@ -206,51 +206,67 @@ async function run() {
     console.log('Error setting localStorage - continuing without it');
   }
 
+  // --- ДОБАВЛЕНО: Работа с cookies (сохраняем и подгружаем между сессиями) ---
+  const cookiesPath = path.resolve('cookies.json');
+  if (fs.existsSync(cookiesPath)) {
+    const cookies = JSON.parse(fs.readFileSync(cookiesPath, 'utf-8'));
+    await page.setCookie(...cookies);
+  }
+
+  // --- ДОБАВЛЕНО: Рандомизация языка браузера ---
+  const languages = [
+    ['ru-RU', 'ru', 'en-US', 'en'],
+    ['uk-UA', 'uk', 'en-US', 'en'],
+    ['en-US', 'en'],
+    ['ru', 'en'],
+    ['uk', 'en']
+  ];
+  await page.setExtraHTTPHeaders({
+    'Accept-Language': languages[getRandomInt(0, languages.length - 1)].join(',')
+  });
+
   for (const searchQuery of searchQueries) {
     try {
       console.log(`🔍 Поиск: "${searchQuery}"`);
-      
-      // Visit Google homepage first
       await page.goto('https://www.google.com/', { 
         waitUntil: 'networkidle0',
         timeout: 60000 
       });
-      
-      // Simulate human-like behavior before searching
       await moveMouseRandomly(page);
       await delay(getRandomInt(1000, 3000));
-      
-      // Type search query with human-like patterns
       await humanLikeType(page, 'textarea[name="q"]', searchQuery);
       await delay(getRandomInt(500, 1500));
-      
-      // Press Enter with random delay
       await page.keyboard.press('Enter');
-      await page.waitForNavigation({ 
-        waitUntil: 'networkidle0',
-        timeout: 60000 
-      });
+      await Promise.race([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {}),
+        page.waitForSelector('div#search', { timeout: 15000 }).catch(() => {})
+      ]);
 
-      // Check for reCAPTCHA
-      const recaptchaFrame = await page
-        .frames()
-        .find(f => f.url().includes('google.com/recaptcha/api2/anchor'));
+      // --- Проверка и решение reCAPTCHA ---
+      const recaptchaFrame = await new Promise(resolve => {
+        const interval = setInterval(() => {
+          const frame = page.frames().find(f => f.url().includes('google.com/recaptcha/api2/anchor'));
+          if (frame) {
+            clearInterval(interval);
+            resolve(frame);
+          }
+        }, 500);
+        setTimeout(() => {
+          clearInterval(interval);
+          resolve(null);
+        }, 30000); // 30 секунд
+      });
 
       if (recaptchaFrame) {
         console.log('reCAPTCHA detected!');
-
-        // Extract sitekey and data-s
+        // Пробуем найти sitekey и data-s
         const sitekey = await page.$eval('.g-recaptcha', el => el.getAttribute('data-sitekey'));
         const dataS = await page.$eval('.g-recaptcha', el => el.getAttribute('data-s'));
         const pageurl = page.url();
-
         if (!sitekey || !dataS) {
           throw new Error('Could not extract sitekey or data-s');
         }
-
-        // Solve with 2Captcha
         const solver = new Solver(API_KEY);
-
         console.log('Submitting to 2Captcha...');
         const { data } = await solver.recaptcha(
           sitekey,
@@ -261,57 +277,99 @@ async function run() {
             proxytype: 'HTTP',
           }
         );
-
         const token = data;
-
-        // Inject token and submit
         await page.evaluate(token => {
           const textarea = document.getElementById('g-recaptcha-response') as HTMLTextAreaElement;
           if (textarea) {
             textarea.value = token;
             textarea.style.display = '';
           }
-          // Submit the form
           const form = textarea?.closest('form');
           if (form) {
             form.submit();
           }
         }, token);
-
         console.log('Submitted token, waiting for navigation...');
         await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
         console.log('Bypassed reCAPTCHA!');
       }
 
-      // Simulate natural browsing behavior
-      await moveMouseRandomly(page);
-      await humanLikeScroll(page);
-      await delay(getRandomInt(2000, 4000));
+      // --- Новый цикл по страницам ---
+      let pageNum = 1;
+      let foundDomains = targetDomains.map(domain => ({ domain, position: 'Not found' as string, page: null as number | null }));
+      let maxPages = 7; // Максимум страниц для проверки
+      let stop = false;
+      while (pageNum <= maxPages && !stop) {
+        await moveMouseRandomly(page);
+        await humanLikeScroll(page);
+        await delay(getRandomInt(2000, 4000));
 
-      const links = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('a')).map(a => a.href)
-      );
+        // Проверяем позиции доменов
+        const found = await page.evaluate((targetDomains) => {
+          const citeNodes = Array.from(document.querySelectorAll('cite'));
+          const citeTexts = citeNodes.map(node => (node.textContent ? node.textContent.trim() : ''));
+          return targetDomains.map(domain => {
+            const index = citeTexts.findIndex(text => text.includes(domain));
+            return {
+              domain,
+              position: index >= 0 ? index + 1 : 'Not found',
+            };
+          });
+        }, targetDomains);
 
-      const found = targetDomains.map(domain => {
-        const index = links.findIndex(link => link.includes(domain));
-        return {
-          domain,
-          position: index >= 0 ? index + 1 : 'Not found',
-        };
+        // Если хотя бы один домен найден, делаем скриншот
+        if (found.some(result => result.position !== 'Not found')) {
+          const screenshotPath = path.resolve(`results/search-${searchQuery}-page${pageNum}.png`);
+          await page.screenshot({ path: screenshotPath, fullPage: true });
+        }
+
+        // Логируем результат для каждой страницы
+        found.forEach((result, idx) => {
+          if (result.position !== 'Not found' && foundDomains[idx].position === 'Not found') {
+            foundDomains[idx] = { domain: result.domain, position: String(result.position), page: pageNum };
+            console.log(`${result.domain} page=${pageNum} place=${result.position}`);
+          }
+        });
+
+        // Проверяем, остались ли ещё не найденные домены
+        const hasUnfound = foundDomains.some(d => d.position === 'Not found');
+        if (!hasUnfound) {
+          stop = true;
+          break;
+        }
+
+        // Переход на следующую страницу
+        const nextPageHref = await page.evaluate((pageNum) => {
+          // Ищем ссылку именно на следующую по номеру страницу
+          const next = Array.from(document.querySelectorAll('a[aria-label]'))
+            .find(a => a.getAttribute('aria-label') === `Page ${pageNum + 1}`);
+          return next ? (next as HTMLAnchorElement).href : null;
+        }, pageNum);
+        if (nextPageHref) {
+          await Promise.all([
+            page.goto(nextPageHref, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {}),
+            page.waitForSelector('div#search', { timeout: 20000 }).catch(() => {})
+          ]);
+          pageNum++;
+          await delay(getRandomInt(1000, 2000));
+        } else {
+          break;
+        }
+      }
+
+      // Если домен не найден ни на одной странице, логируем Not found
+      foundDomains.forEach(result => {
+        if (result.position === 'Not found') {
+          console.log(`${result.domain} Not found`);
+        }
       });
 
-      const screenshotPath = path.resolve(`results/search-${searchQuery}.png`);
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-
-      found.forEach(result => {
-        console.log(`${result.domain}: ${result.position}`);
-      });
-
-      // Random delay between searches
+      // --- ДОБАВЛЕНО: Сохраняем cookies после каждого поиска ---
+      const cookies = await page.cookies();
+      fs.writeFileSync(cookiesPath, JSON.stringify(cookies, null, 2));
       await delay(getRandomInt(5000, 10000));
     } catch (error) {
       console.error(`Error processing search query "${searchQuery}":`, error);
-      // Continue with next query even if current one fails
       continue;
     }
   }
