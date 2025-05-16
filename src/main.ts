@@ -10,7 +10,7 @@ const API_KEY = '073a33ff8679b4d94d77dd436c287d4f'; // <-- Replace with your 2Ca
 const proxy = {
   host: 'de.922s5.net',
   port: 6300,
-  username: '17669994-zone-custom-region-UA-sessid-fgmPp8Iz',
+  username: '17669994-zone-custom-region-UA-sessid-T2MVxzdH',
   password: 'FQORPLVx',
 };
 
@@ -32,6 +32,7 @@ const targetDomains = [
   'bet-2.fun',
   'bet2fun-sport.pro',
   'bet2fun-casino.online',
+  'bet2fun-casino.com'
 ];
 
 function getRandomInt(min: number, max: number): number {
