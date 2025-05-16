@@ -2,12 +2,15 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Solver } from '2captcha';
 
 puppeteer.use(StealthPlugin());
+
+const API_KEY = '073a33ff8679b4d94d77dd436c287d4f'; // <-- Replace with your 2Captcha API key
 const proxy = {
   host: 'de.922s5.net',
   port: 6300,
-  username: '17669994-zone-custom-region-UA-sessid-TkNVHywa',
+  username: '17669994-zone-custom-region-UA-sessid-ZzbDPkab',
   password: 'FQORPLVx',
 };
 
@@ -228,6 +231,58 @@ async function run() {
         timeout: 60000 
       });
 
+      // Check for reCAPTCHA
+      const recaptchaFrame = await page
+        .frames()
+        .find(f => f.url().includes('google.com/recaptcha/api2/anchor'));
+
+      if (recaptchaFrame) {
+        console.log('reCAPTCHA detected!');
+
+        // Extract sitekey and data-s
+        const sitekey = await page.$eval('.g-recaptcha', el => el.getAttribute('data-sitekey'));
+        const dataS = await page.$eval('.g-recaptcha', el => el.getAttribute('data-s'));
+        const pageurl = page.url();
+
+        if (!sitekey || !dataS) {
+          throw new Error('Could not extract sitekey or data-s');
+        }
+
+        // Solve with 2Captcha
+        const solver = new Solver(API_KEY);
+
+        console.log('Submitting to 2Captcha...');
+        const { data } = await solver.recaptcha(
+          sitekey,
+          pageurl,
+          {
+            'data-s': dataS,
+            proxy: `${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`,
+            proxytype: 'HTTP',
+          }
+        );
+
+        const token = data;
+
+        // Inject token and submit
+        await page.evaluate(token => {
+          const textarea = document.getElementById('g-recaptcha-response') as HTMLTextAreaElement;
+          if (textarea) {
+            textarea.value = token;
+            textarea.style.display = '';
+          }
+          // Submit the form
+          const form = textarea?.closest('form');
+          if (form) {
+            form.submit();
+          }
+        }, token);
+
+        console.log('Submitted token, waiting for navigation...');
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+        console.log('Bypassed reCAPTCHA!');
+      }
+
       // Simulate natural browsing behavior
       await moveMouseRandomly(page);
       await humanLikeScroll(page);
@@ -245,7 +300,7 @@ async function run() {
         };
       });
 
-      const screenshotPath = path.resolve(`search-${searchQuery}.png`);
+      const screenshotPath = path.resolve(`results/search-${searchQuery}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true });
 
       found.forEach(result => {
