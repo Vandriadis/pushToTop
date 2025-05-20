@@ -1,0 +1,1 @@
+export const API_KEY = '073a33ff8679b4d94d77dd436c287d4f'; // <-- Replace with your 2Captcha API key 

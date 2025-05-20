@@ -3,103 +3,13 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Solver } from '2captcha';
+import { getRandomInt, delay, moveMouseRandomly, humanLikeScroll, humanLikeType } from './helpers/puppeteerUtils';
+import { extractDomainPositions } from './helpers/searchUtils';
+import { searchQueries, targetDomains, userAgents, languages } from './config/constants';
+import { proxy } from './config/proxy';
+import { API_KEY } from './config/captcha';
 
 puppeteer.use(StealthPlugin());
-
-const API_KEY = '073a33ff8679b4d94d77dd436c287d4f'; // <-- Replace with your 2Captcha API key
-const proxy = {
-  host: 'de.922s5.net',
-  port: 6300,
-  username: '17669994-zone-custom-region-UA-sessid-T2MVxzdH',
-  password: 'FQORPLVx',
-};
-
-const searchQueries = [
-  'bet2fun',
-  'бет2фан',
-  'бет2фан ставки',
-  'бет2фан вход',
-  'бет2фан скачать',
-  'бет2фан зеркало',
-  'бет 2 фан',
-  'бет ту фан',
-];
-
-const targetDomains = [
-  'info-bet2fun.com',
-  'betmaniaua.com',
-  'bet2fun-bonus.com',
-  'bet-2.fun',
-  'bet2fun-sport.pro',
-  'bet2fun-casino.online',
-  'bet2fun-casino.com'
-];
-
-function getRandomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1) + min);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Enhanced user agents with more variety
-const userAgents = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
-];
-
-// Function to generate random mouse movement path
-async function moveMouseRandomly(page: any) {
-  const viewport = await page.viewport();
-  const points = [];
-  const numPoints = getRandomInt(3, 7);
-  
-  for (let i = 0; i < numPoints; i++) {
-    points.push({
-      x: getRandomInt(0, viewport.width),
-      y: getRandomInt(0, viewport.height)
-    });
-  }
-
-  for (const point of points) {
-    await page.mouse.move(point.x, point.y, { steps: getRandomInt(25, 50) });
-    await delay(getRandomInt(100, 300));
-  }
-}
-
-// Function to simulate human-like scrolling
-async function humanLikeScroll(page: any) {
-  const viewport = await page.viewport();
-  const maxScrolls = getRandomInt(3, 7);
-  
-  for (let i = 0; i < maxScrolls; i++) {
-    const scrollAmount = getRandomInt(100, 300);
-    await page.evaluate((amount: number) => {
-      window.scrollBy({
-        top: amount,
-        behavior: 'smooth'
-      });
-    }, scrollAmount);
-    await delay(getRandomInt(800, 2000));
-  }
-}
-
-// Function to simulate random typing patterns
-async function humanLikeType(page: any, selector: string, text: string) {
-  await page.waitForSelector(selector);
-  await page.click(selector);
-  
-  for (const char of text) {
-    await page.type(selector, char, { delay: getRandomInt(50, 150) });
-    if (Math.random() < 0.1) { // 10% chance of a longer pause
-      await delay(getRandomInt(200, 500));
-    }
-  }
-}
 
 async function run() {
   const args = [
@@ -215,13 +125,6 @@ async function run() {
   }
 
   // --- ДОБАВЛЕНО: Рандомизация языка браузера ---
-  const languages = [
-    ['ru-RU', 'ru', 'en-US', 'en'],
-    ['uk-UA', 'uk', 'en-US', 'en'],
-    ['en-US', 'en'],
-    ['ru', 'en'],
-    ['uk', 'en']
-  ];
   await page.setExtraHTTPHeaders({
     'Accept-Language': languages[getRandomInt(0, languages.length - 1)].join(',')
   });
@@ -306,26 +209,16 @@ async function run() {
         await delay(getRandomInt(2000, 4000));
 
         // Проверяем позиции доменов
-        const found = await page.evaluate((targetDomains) => {
-          const citeNodes = Array.from(document.querySelectorAll('cite'));
-          const citeTexts = citeNodes.map(node => (node.textContent ? node.textContent.trim() : ''));
-          return targetDomains.map(domain => {
-            const index = citeTexts.findIndex(text => text.includes(domain));
-            return {
-              domain,
-              position: index >= 0 ? index + 1 : 'Not found',
-            };
-          });
-        }, targetDomains);
+        const found = await extractDomainPositions(page, targetDomains);
 
         // Если хотя бы один домен найден, делаем скриншот
-        if (found.some(result => result.position !== 'Not found')) {
+        if (found.some((result: { domain: string; position: string | number }) => result.position !== 'Not found')) {
           const screenshotPath = path.resolve(`results/search-${searchQuery}-page${pageNum}.png`);
           await page.screenshot({ path: screenshotPath, fullPage: true });
         }
 
         // Логируем результат для каждой страницы
-        found.forEach((result, idx) => {
+        found.forEach((result: { domain: string; position: string | number }, idx: number) => {
           if (result.position !== 'Not found' && foundDomains[idx].position === 'Not found') {
             foundDomains[idx] = { domain: result.domain, position: String(result.position), page: pageNum };
             console.log(`${result.domain} page=${pageNum} place=${result.position}`);
@@ -341,7 +234,7 @@ async function run() {
 
         // Переход на следующую страницу
         const nextPageHref = await page.evaluate((pageNum) => {
-          // Ищем ссылку именно на следующую по номеру страницу
+          // Ищем ссылку именно на следующую по номеру страницы
           const next = Array.from(document.querySelectorAll('a[aria-label]'))
             .find(a => a.getAttribute('aria-label') === `Page ${pageNum + 1}`);
           return next ? (next as HTMLAnchorElement).href : null;
