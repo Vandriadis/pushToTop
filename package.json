@@ -1,21 +1,22 @@
 {
-  "name": "pushtotop",
-  "module": "index.ts",
+  "name": "push-to-top",
+  "version": "1.0.0",
   "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^22.15.18"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+  "scripts": {
+    "start": "ts-node --esm src/main.ts",
+    "build": "tsc",
+    "dev": "ts-node-dev --esm src/main.ts"
   },
   "dependencies": {
     "2captcha": "^3.0.5-2",
-    "dotenv": "^16.5.0",
-    "node-telegram-bot-api": "^0.66.0",
-    "puppeteer": "^24.8.2",
+    "puppeteer": "^24.9.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
   }
 }
