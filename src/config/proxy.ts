@@ -18,8 +18,8 @@ function validateProxyConfig(config: ProxyConfig): void {
 export const proxy: ProxyConfig = {
   host: 'de.922s5.net',
   port: '6300',
-  username: '17669994-zone-custom-region-UA-sessid-Nphb9uMA',
-  password: 'FQORPLVx'
+  username: '1-UA-sessid-Nphb9uMA',
+  password: ''
 };
 // Validate proxy configuration
 validateProxyConfig(proxy);
