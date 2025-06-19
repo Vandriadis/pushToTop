@@ -4,7 +4,7 @@ function validateCaptchaApiKey(apiKey: string): void {
   }
 }
 
-export const API_KEY = '073a33ff8679b4d94d77dd436c287d4f';
+export const API_KEY = '';
 
 // Validate API key
 validateCaptchaApiKey(API_KEY); 
