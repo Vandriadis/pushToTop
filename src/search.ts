@@ -6,8 +6,8 @@ puppeteer.use(StealthPlugin());
 const proxy = {
   host: 'de.922s5.net',
   port: 6300,
-  username: '17669994-zone-custom-region-UA-sessid-TkNVHywa',
-  password: 'FQORPLVx',
+  username: '',
+  password: '',
 };
 
 function getRandomInt(min: number, max: number): number {
