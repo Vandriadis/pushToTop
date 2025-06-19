@@ -4,13 +4,13 @@ import { Solver } from '2captcha';
 
 puppeteer.use(StealthPlugin());
 
-const API_KEY = '073a33ff8679b4d94d77dd436c287d4f'; // <-- Replace with your 2Captcha API key
+const API_KEY = ''; // <-- Replace with your 2Captcha API key
 
 const proxy = {
   host: 'de.922s5.net',
   port: 6300,
-  username: '17669994-zone-custom-region-UA-sessid-OGRvTm81',
-  password: 'FQORPLVx',
+  username: '',
+  password: '',
 };
 
 function delay(ms: number) {
