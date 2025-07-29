@@ -1,21 +1,9 @@
 export const searchQueries = [
-  'bet2fun',
-  'бет2фан',
-  'бет2фан ставки',
-  'бет2фан вход',
-  'бет2фан скачать',
-  'бет2фан зеркало',
-  'бет 2 фан',
-  'бет ту фан',
+  'example'
 ];
 
 export const targetDomains = [
-  'info-bet2fun.com',
-  'betmaniaua.com',
-  'bet2fun-bonus.com',
-  'bet-2.fun',
-  'bet2fun-sport.pro',
-  'bet2fun-casino.online',
+  'example.com'
 ];
 
 export const userAgents = [
